@@ -253,6 +253,7 @@ public class ZES_Type0 extends ZES_TypeInfluxDB
             }
             ZES_addInsertErrorNumQuery(ZES_lv_queries);
             ZES_SQLGenerator.executeBatchQuery(ZES_lv_conn, ZES_lv_queries);
+            ZES_updateNetworkCheckRealtime(ZES_lv_conn);
             System.out.println("type 0 db insert success =>");
 
         }
