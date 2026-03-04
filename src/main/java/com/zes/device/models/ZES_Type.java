@@ -1,5 +1,8 @@
 package com.zes.device.models;
 
+import com.zes.device.ZES_SQLGenerator;
+
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
@@ -61,6 +64,13 @@ public abstract class ZES_Type
     {
         ZES_gv_logger.severe("This error occurs from " + ZES_gv_ictNumber);
         e.printStackTrace();
+    }
+
+
+    protected void ZES_updateNetworkCheckRealtime(Connection conn) throws SQLException
+    {
+        String ZES_lv_networkCheckRealtimeUpsertQuery = ZES_SQLGenerator.getNetworkCheckRealtimeUpsertQuery(ZES_gv_ictNumber, ZES_gv_timestamp);
+        ZES_SQLGenerator.executeQuery(conn, ZES_lv_networkCheckRealtimeUpsertQuery);
     }
 
     protected void ZES_parse(ZES_Data[] dataMap, ResultSet resultSet) {

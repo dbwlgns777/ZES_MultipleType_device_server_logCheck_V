@@ -13,6 +13,8 @@ import java.util.stream.Collectors;
 
 public class ZES_SQLGenerator
 {
+    private static final String ZES_gv_networkCheckRealtimeTable = "pms_network_check_realtime";
+
     public static String addQuote(Object value)
     {
         return "'" + value + "'";
@@ -35,6 +37,30 @@ public class ZES_SQLGenerator
 
     public static String getUpdateQuery(ZES_Data[] dataMap, String ictNumber, String tableName, long timestamp) {
         return String.format("UPDATE %s SET %s WHERE ict_number=%s", tableName, formatUpdateValues(dataMap, timestamp), addQuote(ictNumber));
+    }
+
+    public static String getNetworkCheckRealtimeUpsertQuery(String ictNumber, long timestamp)
+    {
+        String ZES_lv_currentTimestamp = convertTimestampToMySQLTimestamp(timestamp);
+        return String.format(
+                "INSERT INTO %s (ict_number, collection_interval_sec, connection_count, modified_date) " +
+                "VALUES (%s, 0, 1, %s) " +
+                "ON DUPLICATE KEY UPDATE " +
+                "collection_interval_sec = CASE " +
+                "WHEN DATE(modified_date) = DATE(%s) THEN TIMESTAMPDIFF(SECOND, modified_date, %s) " +
+                "ELSE 0 END, " +
+                "connection_count = CASE " +
+                "WHEN DATE(modified_date) = DATE(%s) THEN connection_count + 1 " +
+                "ELSE 1 END, " +
+                "modified_date = %s",
+                ZES_gv_networkCheckRealtimeTable,
+                addQuote(ictNumber),
+                ZES_lv_currentTimestamp,
+                ZES_lv_currentTimestamp,
+                ZES_lv_currentTimestamp,
+                ZES_lv_currentTimestamp,
+                ZES_lv_currentTimestamp
+        );
     }
 
     public static void insert(Connection conn, ZES_Data[] dataMap, String ictNumber, String tableName, long timestamp) throws SQLException
