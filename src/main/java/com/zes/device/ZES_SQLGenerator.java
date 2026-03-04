@@ -47,7 +47,7 @@ public class ZES_SQLGenerator
                 "VALUES (%s, 0, 1, %s) " +
                 "ON DUPLICATE KEY UPDATE " +
                 "collection_interval_sec = CASE " +
-                "WHEN DATE(modified_date) = DATE(%s) THEN TIMESTAMPDIFF(SECOND, modified_date, %s) " +
+                "WHEN DATE(modified_date) = DATE(%s) THEN GREATEST(ROUND(TIMESTAMPDIFF(MICROSECOND, modified_date, %s) / 1000000, 2), 0) " +
                 "ELSE 0 END, " +
                 "connection_count = CASE " +
                 "WHEN DATE(modified_date) = DATE(%s) THEN connection_count + 1 " +
