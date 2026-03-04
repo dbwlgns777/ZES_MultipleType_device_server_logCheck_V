@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 public class ZES_SQLGenerator
@@ -39,27 +40,32 @@ public class ZES_SQLGenerator
         return String.format("UPDATE %s SET %s WHERE ict_number=%s", tableName, formatUpdateValues(dataMap, timestamp), addQuote(ictNumber));
     }
 
-    public static String getNetworkCheckRealtimeUpsertQuery(String ictNumber, long timestamp)
+    public static PreparedStatement findNetworkCheckRealtimeByIctNumber(Connection conn, String ictNumber) throws SQLException
     {
-        String ZES_lv_currentTimestamp = convertTimestampToMySQLTimestamp(timestamp);
+        String ZES_lv_selectQuery = String.format("SELECT connection_count, modified_date FROM %s WHERE ict_number=?", ZES_gv_networkCheckRealtimeTable);
+        PreparedStatement ZES_lv_prepStmt = conn.prepareStatement(ZES_lv_selectQuery);
+        ZES_lv_prepStmt.setString(1, ictNumber);
+        return ZES_lv_prepStmt;
+    }
+
+    public static String getNetworkCheckRealtimeUpsertQuery(String ictNumber, double collectionIntervalSec, int connectionCount, long currentTimestamp)
+    {
         return String.format(
+                Locale.US,
                 "INSERT INTO %s (ict_number, collection_interval_sec, connection_count, modified_date) " +
-                "VALUES (%s, 0, 1, %s) " +
+                "VALUES (%s, %.2f, %d, %s) " +
                 "ON DUPLICATE KEY UPDATE " +
-                "collection_interval_sec = CASE " +
-                "WHEN DATE(modified_date) = DATE(%s) THEN GREATEST(ROUND(TIMESTAMPDIFF(MICROSECOND, modified_date, %s) / 1000000, 2), 0) " +
-                "ELSE 0 END, " +
-                "connection_count = CASE " +
-                "WHEN DATE(modified_date) = DATE(%s) THEN connection_count + 1 " +
-                "ELSE 1 END, " +
+                "collection_interval_sec = %.2f, " +
+                "connection_count = %d, " +
                 "modified_date = %s",
                 ZES_gv_networkCheckRealtimeTable,
                 addQuote(ictNumber),
-                ZES_lv_currentTimestamp,
-                ZES_lv_currentTimestamp,
-                ZES_lv_currentTimestamp,
-                ZES_lv_currentTimestamp,
-                ZES_lv_currentTimestamp
+                collectionIntervalSec,
+                connectionCount,
+                convertTimestampToMySQLTimestamp(currentTimestamp),
+                collectionIntervalSec,
+                connectionCount,
+                convertTimestampToMySQLTimestamp(currentTimestamp)
         );
     }
 

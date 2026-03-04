@@ -3,8 +3,11 @@ package com.zes.device.models;
 import com.zes.device.ZES_SQLGenerator;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.zes.device.ZES_DeviceApplication.*;
 
@@ -15,6 +18,19 @@ public abstract class ZES_Type
     public String ZES_gv_ictNumber;
     protected Boolean ZES_gv_hasAnyNewValue = null;
     protected boolean ZES_gv_hasPrevData = false;
+    private static final ConcurrentHashMap<String, ZES_NetworkCheckRealtimeCache> ZES_gv_networkCheckRealtimeCache = new ConcurrentHashMap<>();
+
+    private static class ZES_NetworkCheckRealtimeCache
+    {
+        private final long modifiedTimestamp;
+        private final int connectionCount;
+
+        private ZES_NetworkCheckRealtimeCache(long modifiedTimestamp, int connectionCount)
+        {
+            this.modifiedTimestamp = modifiedTimestamp;
+            this.connectionCount = connectionCount;
+        }
+    }
     protected abstract void ZES_parseData(ZES_Data data, ResultSet resultSet) throws SQLException;
 
     abstract public ZES_Type ZES_saveRealTime() throws SQLException;
@@ -69,8 +85,68 @@ public abstract class ZES_Type
 
     protected void ZES_updateNetworkCheckRealtime(Connection conn) throws SQLException
     {
-        String ZES_lv_networkCheckRealtimeUpsertQuery = ZES_SQLGenerator.getNetworkCheckRealtimeUpsertQuery(ZES_gv_ictNumber, ZES_gv_timestamp);
-        ZES_SQLGenerator.executeQuery(conn, ZES_lv_networkCheckRealtimeUpsertQuery);
+        long ZES_lv_nowTimestamp = System.currentTimeMillis();
+        String ZES_lv_ictNumberLock = ("NETWORK_CHECK_" + ZES_gv_ictNumber).intern();
+
+        synchronized (ZES_lv_ictNumberLock)
+        {
+            ZES_NetworkCheckRealtimeCache ZES_lv_cached = ZES_gv_networkCheckRealtimeCache.get(ZES_gv_ictNumber);
+            if (ZES_lv_cached == null)
+            {
+                ZES_lv_cached = ZES_loadNetworkCheckRealtimeCache(conn, ZES_gv_ictNumber, ZES_lv_nowTimestamp);
+            }
+
+            String ZES_lv_nowDate = ZES_SQLGenerator.convertTimestampToDateFormat(ZES_lv_nowTimestamp, "yyyy-MM-dd");
+            String ZES_lv_prevDate = ZES_SQLGenerator.convertTimestampToDateFormat(ZES_lv_cached.modifiedTimestamp, "yyyy-MM-dd");
+
+            double ZES_lv_collectionIntervalSec;
+            int ZES_lv_connectionCount;
+
+            if (ZES_lv_nowDate.equals(ZES_lv_prevDate))
+            {
+                double ZES_lv_intervalInSec = (ZES_lv_nowTimestamp - ZES_lv_cached.modifiedTimestamp) / 1000.0;
+                ZES_lv_collectionIntervalSec = Math.max(Math.round(ZES_lv_intervalInSec * 100.0) / 100.0, 0.0);
+                ZES_lv_connectionCount = ZES_lv_cached.connectionCount + 1;
+            }
+            else
+            {
+                ZES_lv_collectionIntervalSec = 0.0;
+                ZES_lv_connectionCount = 1;
+            }
+
+            String ZES_lv_networkCheckRealtimeUpsertQuery = ZES_SQLGenerator.getNetworkCheckRealtimeUpsertQuery(
+                    ZES_gv_ictNumber,
+                    ZES_lv_collectionIntervalSec,
+                    ZES_lv_connectionCount,
+                    ZES_lv_nowTimestamp
+            );
+            ZES_SQLGenerator.executeQuery(conn, ZES_lv_networkCheckRealtimeUpsertQuery);
+
+            ZES_gv_networkCheckRealtimeCache.put(
+                    ZES_gv_ictNumber,
+                    new ZES_NetworkCheckRealtimeCache(ZES_lv_nowTimestamp, ZES_lv_connectionCount)
+            );
+        }
+    }
+
+    private ZES_NetworkCheckRealtimeCache ZES_loadNetworkCheckRealtimeCache(Connection conn, String ictNumber, long nowTimestamp) throws SQLException
+    {
+        try
+        (
+            PreparedStatement ZES_lv_stmt = ZES_SQLGenerator.findNetworkCheckRealtimeByIctNumber(conn, ictNumber);
+            ResultSet ZES_lv_resultSet = ZES_lv_stmt.executeQuery()
+        )
+        {
+            if (ZES_lv_resultSet.next())
+            {
+                Timestamp ZES_lv_modifiedDate = ZES_lv_resultSet.getTimestamp("modified_date");
+                long ZES_lv_modifiedTimestamp = ZES_lv_modifiedDate == null ? nowTimestamp : ZES_lv_modifiedDate.getTime();
+                int ZES_lv_connectionCount = ZES_lv_resultSet.getInt("connection_count");
+                return new ZES_NetworkCheckRealtimeCache(ZES_lv_modifiedTimestamp, ZES_lv_connectionCount);
+            }
+        }
+
+        return new ZES_NetworkCheckRealtimeCache(nowTimestamp, 0);
     }
 
     protected void ZES_parse(ZES_Data[] dataMap, ResultSet resultSet) {
