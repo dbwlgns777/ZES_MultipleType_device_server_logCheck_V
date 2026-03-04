@@ -140,11 +140,13 @@ public class ZES_Type4 extends ZES_TypeInfluxDB {
             if(ZES_gv_hasPrevData)
             {
                 ZES_SQLGenerator.update(ZES_lv_conn, ZES_gv_DATA_MAP, ZES_gv_tableName, ZES_gv_ictNumber, ZES_gv_timestamp);
+                ZES_updateNetworkCheckRealtime(ZES_lv_conn);
                 System.out.println("type 4 db insert success =>");
             }
             else
             {
                 ZES_SQLGenerator.insert(ZES_lv_conn, ZES_gv_DATA_MAP, ZES_gv_ictNumber, ZES_gv_tableName, ZES_gv_timestamp);
+                ZES_updateNetworkCheckRealtime(ZES_lv_conn);
                 System.out.println("type 4 db insert success =>");
             }
         }
